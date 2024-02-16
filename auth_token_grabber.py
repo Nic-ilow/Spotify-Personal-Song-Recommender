@@ -9,13 +9,14 @@ from threading import Thread
 from creds import client_id, client_secret
 
 # Local server parameters
-server_address = ("localhost", 7777)
-redirect_uri = "http://localhost:7777/callback"
+server_address = ("localhost", 8000)
+redirect_uri = "http://localhost:8000/callback"
 state = ''.join(random.choices(string.ascii_lowercase + string.digits, k=21))
 # Spotify API endpoints
 authorize_url = "https://accounts.spotify.com/authorize"
 token_url = "https://accounts.spotify.com/api/token"
 
+global access_token
 
 def get_auth_url():
     # Generate the authorization URL
@@ -40,7 +41,10 @@ def get_access_token(code):
         "redirect_uri": redirect_uri
     }
     response = requests.post(token_url, headers=headers, data=data)
-    return response.json().get("access_token")
+
+    global access_token
+    access_token = response.json().get("access_token")
+    return access_token
 
 
 class CallbackHandler(BaseHTTPRequestHandler):
@@ -53,7 +57,7 @@ class CallbackHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         # Exchange the authorization code for an access token
-        access_token = get_access_token(params["code"][0])
+        get_access_token(params["code"][0])
         self.server.access_token = access_token
         # Send the access token back to the client
         self.send_response(200)
@@ -69,10 +73,17 @@ def main():
 
     # Obtain the authorization URL and open it in a browser
     auth_url = get_auth_url()
-    webbrowser.open(auth_url)
-    access_token = server.access_token
+    print(auth_url)
+    # webbrowser.open(auth_url)
+    val = input('Please enter "y" when logged in: ')
+    if not str(val).upper() == 'Y':
+        raise Exception('You did not confirm you were authenticated')
+    try:
+        access_token = server.access_token
+    except:
+        pass
 
-    server.shutdown()
-    server.server_close()
+    # server.shutdown()
+    # server.server_close()
 
     return access_token

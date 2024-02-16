@@ -4,9 +4,8 @@ import json
 import random
 
 
-def get_tracks(headers):
+def get_tracks(headers, playlist_share_link):
     # Set up the API endpoint URL
-    playlist_share_link = 'https://open.spotify.com/playlist/4JTspUujhd8IedUJh0p0qa?si=ced194b74e544f9b'
     playlist_id = playlist_share_link.split('/')[-1].split('=')[0]
 
     endpoint = f"https://api.spotify.com/v1/playlists/{playlist_id}"
@@ -16,6 +15,8 @@ def get_tracks(headers):
 
     # Convert the response to a JSON object
     track_data = json.loads(response.content)
+
+    return track_data
 
 def get_playlist_info(track_data, headers):
     # Grab track popularities. Get id's to sanity check
@@ -36,18 +37,18 @@ def get_playlist_info(track_data, headers):
 
     return playlist_info
 
-def generate_rec_endpoint(playlist_info, user_inputs):
-    mean_dance = playlist_info.danceability.mean()
-    mean_energy = playlist_info.energy.mean()
-    mean_speechiness = playlist_info.speechiness.mean()
-    mean_acousticness = playlist_info.acousticness.mean()
-    mean_tempo = playlist_info.tempo.mean()
-    mean_valence = playlist_info.valence.mean()
-    mean_popularity = playlist_info.popularity.mean()
-
-    seed_by_popularity = False
+def generate_rec_endpoint(playlist_info, user_inputs, use_means, seed_by_popularity = False):
+    if use_means:
+        mean_dict = {}
+        mean_dict['target_danceability'] = playlist_info.danceability.mean()
+        mean_dict['target_energy'] = playlist_info.energy.mean()
+        mean_dict['target_speechiness'] = playlist_info.speechiness.mean()
+        mean_dict['target_acousticness'] = playlist_info.acousticness.mean()
+        mean_dict['target_tempo'] = playlist_info.tempo.mean()
+        mean_dict['target_valence'] = playlist_info.valence.mean()
 
     if seed_by_popularity:
+        mean_popularity = playlist_info.popularity.mean()
         seed_songs = playlist_info.id.iloc[(playlist_info.popularity-mean_popularity).abs().argsort()[:5]].to_list()
     else:
         seed_songs = playlist_info.id.iloc[random.sample(range(0, len(playlist_info)), 5)]
@@ -57,8 +58,13 @@ def generate_rec_endpoint(playlist_info, user_inputs):
         seed_song_str += song_id + '&'
 
     ep_string = ''
-    for key, val in user_inputs.items():
-        ep_string += (key + '=' + str(val) + '&')
+    if not use_means:
+        for key, val in user_inputs.items():
+            ep_string += (key + '=' + str(val) + '&')
+    else:
+        for key, val in mean_dict.items():
+            ep_string += (key + '=' + str(val) + '&')
+
     ep_string = ep_string[:-1]
 
     rec_endpoint = f'https://api.spotify.com/v1/recommendations?limit=5&{seed_song_str}{ep_string}'
@@ -84,14 +90,14 @@ def get_recs(rec_endpoint, headers):
 
         return results
 
-def main(access_token, user_inputs):
+def main(access_token, playlist_share_link, user_inputs):
     headers = {
         "Authorization": f"Bearer {access_token}"
     }
 
-    track_data = get_tracks(headers)
+    track_data = get_tracks(headers, playlist_share_link)
     playlist_info = get_playlist_info(track_data, headers)
-    rec_endpoint = generate_rec_endpoint(playlist_info, user_inputs)
+    rec_endpoint = generate_rec_endpoint(playlist_info, user_inputs, use_means=False)
     recs = get_recs(rec_endpoint, headers)
 
     return recs
